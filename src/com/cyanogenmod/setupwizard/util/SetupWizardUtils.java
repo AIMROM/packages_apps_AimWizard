@@ -75,6 +75,7 @@ public class SetupWizardUtils {
 
     private static final String GMS_PACKAGE = "com.google.android.gms";
     private static final String GMS_SUW_PACKAGE = "com.google.android.setupwizard";
+    private static final String GMS_TV_SUW_PACKAGE = "com.google.android.tungsten.setupwraith";
 
     private SetupWizardUtils(){}
 
@@ -218,6 +219,10 @@ public class SetupWizardUtils {
         return fingerprintManager.isHardwareDetected();
     }
 
+    public static boolean simMissing() {
+        return PhoneMonitor.getInstance().simMissing();
+    }
+
     public static String getDefaultThemePackageName(Context context) {
         final String defaultThemePkg = CMSettings.Secure.getString(context.getContentResolver(),
                 CMSettings.Secure.DEFAULT_THEME_PACKAGE);
@@ -237,9 +242,7 @@ public class SetupWizardUtils {
     }
 
     public static void disableComponentsForMissingFeatures(Context context) {
-        if (!hasLeanback(context)) {
-            disableComponent(context, BluetoothSetupActivity.class);
-        }
+        disableComponent(context, BluetoothSetupActivity.class);
         if (!hasFingerprint(context)) {
             disableComponent(context, FingerprintActivity.class);
         }
@@ -247,11 +250,22 @@ public class SetupWizardUtils {
             disableComponent(context, MobileDataActivity.class);
             disableComponent(context, SimMissingActivity.class);
             disableComponent(context, ChooseDataSimActivity.class);
-        } else if (!SetupWizardUtils.isMultiSimDevice(context)) {
+        }
+        if (!SetupWizardUtils.isMultiSimDevice(context)) {
+            disableComponent(context, ChooseDataSimActivity.class);
+        } else if (simMissing()) {
+            disableComponent(context, MobileDataActivity.class);
             disableComponent(context, ChooseDataSimActivity.class);
         }
         if (!SetupWizardUtils.hasWifi(context)) {
             disableComponent(context, WifiSetupActivity.class);
+        }
+
+        // Googles ATV SUW crashes before finishing, leaving devices
+        // unprovisioned. Disable it for now.
+        if (hasLeanback(context) &&
+            PackageManagerUtils.isAppInstalled(context, GMS_TV_SUW_PACKAGE)) {
+            disableApplication(context, GMS_TV_SUW_PACKAGE);
         }
     }
 
@@ -278,6 +292,11 @@ public class SetupWizardUtils {
             Log.v(TAG, "resolveActivity for intent=" + intent + " returns " + comp);
         }
         return comp;
+    }
+
+    public static void disableApplication(Context context, String appname) {
+        context.getPackageManager().setApplicationEnabledSetting(appname,
+                COMPONENT_ENABLED_STATE_DISABLED, 0);
     }
 
     public static void disableComponentSets(Context context, int flags) {
